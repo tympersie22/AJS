@@ -1,0 +1,91 @@
+name: ajs-production
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [ajs_internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/ajs/Dockerfile
+      target: api
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      TZ: UTC
+      HOST: 0.0.0.0
+      PORT: 4000
+    expose: ["4000"]
+    networks: [ajs_internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: apps/ajs/Dockerfile
+      target: frontend
+      args:
+        NEXT_PUBLIC_AJS_API_URL: ${NEXT_PUBLIC_AJS_API_URL:-/api}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      TZ: UTC
+    expose: ["3010"]
+    networks: [ajs_internal]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      AJS_DOMAIN: ${AJS_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/templates:/etc/nginx/ajs-templates:ro
+      - ./deploy/nginx/40-ajs-config.sh:/docker-entrypoint.d/40-ajs-config.sh:ro
+      - ./deploy/certbot:/var/www/certbot:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    networks: [ajs_internal]
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+networks:
+  ajs_internal:
+    driver: bridge
+
+volumes:
+  postgres_data:

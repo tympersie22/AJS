@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  director
+  gm
+  manager
+  hr
+  accountant
+  driver
+  staff
+}
+
+enum Subsidiary {
+  logistics
+  warehouse
+  machinery
+}
+
+enum AlertPriority {
+  low
+  medium
+  high
+}
+
+enum AlertStatus {
+  open
+  acknowledged
+  resolved
+}
+
+enum AlertEventType {
+  created
+  acknowledged
+  resolved
+  reopened
+  auto_resolved
+}
+
+enum NotificationChannel {
+  email
+  sms
+  digest
+}
+
+enum NotificationStatus {
+  sent
+  failed
+}
+
+enum MachineStatus {
+  waiting
+  successful
+  unsuccessful
+  idle
+}
+
+enum EngineHeartbeatStatus {
+  success
+  failed
+}
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  phone         String?
+  password_hash String
+  role          UserRole
+  subsidiary    String?
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+
+  watched_items  WatchedItem[]
+  driver_profile Driver?
+  notification_logs NotificationLog[]
+  alert_thresholds AlertThreshold[]
+
+  @@index([is_active])
+  @@map("users")
+}
+
+model WatchedItem {
+  id              String     @id @default(uuid())
+  subsidiary      Subsidiary
+  item_type       String
+  reference_id    String?
+  title           String
+  status          String
+  due_at          DateTime?
+  threshold_value Float?
+  owner_user_id   String
+  created_at      DateTime   @default(now())
+  updated_at      DateTime   @updatedAt
+
+  owner_user User    @relation(fields: [owner_user_id], references: [id])
+  alerts     Alert[]
+
+  @@index([subsidiary])
+  @@index([item_type])
+  @@index([status])
+  @@unique([item_type, reference_id])
+  @@map("watched_items")
+}
+
+model Alert {
+  id              String        @id @default(uuid())
+  watched_item_id String
+  subsidiary      Subsidiary
+  priority        AlertPriority
+  message         String
+  status          AlertStatus   @default(open)
+  created_at      DateTime      @default(now())
+
+  watched_item WatchedItem  @relation(fields: [watched_item_id], references: [id], onDelete: Restrict)
+  events       AlertEvent[]
+  notification_logs NotificationLog[]
+
+  @@index([status])
+  @@index([subsidiary])
+  @@index([priority])
+  @@map("alerts")
+}
+
+model AlertEvent {
+  id         String         @id @default(uuid())
+  alert_id   String
+  event_type AlertEventType
+  actor      String
+  note       String?
+  created_at DateTime       @default(now())
+
+  alert Alert @relation(fields: [alert_id], references: [id], onDelete: Restrict)
+
+  @@index([alert_id, created_at])
+  @@index([event_type])
+  @@map("alert_events")
+}
+
+model NotificationLog {
+  id                String             @id @default(uuid())
+  alert_id          String?
+  channel           NotificationChannel
+  recipient_user_id String
+  status            NotificationStatus
+  error_message     String?
+  sent_at           DateTime           @default(now())
+
+  alert     Alert? @relation(fields: [alert_id], references: [id], onDelete: Restrict)
+  recipient User  @relation(fields: [recipient_user_id], references: [id], onDelete: Restrict)
+
+  @@unique([alert_id, channel, recipient_user_id])
+  @@index([alert_id])
+  @@index([recipient_user_id])
+  @@index([status])
+  @@map("notification_log")
+}
+
+model DigestHeartbeat {
+  id                   String                @id @default(uuid())
+  run_at               DateTime              @default(now())
+  status               EngineHeartbeatStatus
+  error_message        String?
+  recipients_processed Int
+  deliveries_attempted Int
+
+  @@index([run_at])
+  @@index([status, run_at])
+  @@map("digest_heartbeats")
+}
+
+model EngineHeartbeat {
+  id              String                @id @default(uuid())
+  run_at          DateTime              @default(now())
+  status          EngineHeartbeatStatus
+  error_message   String?
+  items_processed Int
+  alerts_created  Int
+
+  @@index([run_at])
+  @@index([status, run_at])
+  @@map("engine_heartbeats")
+}
+
+model AlertThreshold {
+  id         String   @id @default(uuid())
+  rule_key   String   @unique
+  value      Int
+  updated_by String
+  updated_at DateTime @updatedAt
+
+  updated_by_user User @relation(fields: [updated_by], references: [id], onDelete: Restrict)
+
+  @@index([rule_key])
+  @@map("alert_thresholds")
+}
+
+model Driver {
+  id             String   @id @default(uuid())
+  user_id        String?  @unique
+  name           String
+  license_number String   @unique
+  license_expiry DateTime
+  phone          String
+  status         String
+
+  trips   Trip[]
+  permits Permit[]
+  user    User? @relation(fields: [user_id], references: [id])
+
+  @@map("drivers")
+}
+
+model Vehicle {
+  id               String   @id @default(uuid())
+  plate_number     String   @unique
+  type             String
+  subsidiary_owned Boolean
+  status           String
+
+  trips               Trip[]
+  permits             Permit[]
+  maintenance_records MaintenanceRecord[]
+
+  @@map("vehicles")
+}
+
+model Trip {
+  id                String    @id @default(uuid())
+  driver_id         String
+  vehicle_id        String
+  origin            String
+  destination       String
+  start_time        DateTime
+  expected_end_time DateTime
+  actual_end_time   DateTime?
+  gps_status        String
+  status            String
+
+  driver  Driver  @relation(fields: [driver_id], references: [id])
+  vehicle Vehicle @relation(fields: [vehicle_id], references: [id])
+
+  @@index([driver_id])
+  @@index([vehicle_id])
+  @@index([status])
+  @@map("trips")
+}
+
+model Permit {
+  id          String   @id @default(uuid())
+  vehicle_id  String?
+  driver_id   String?
+  permit_type String
+  issue_date  DateTime
+  expiry_date DateTime
+  status      String
+
+  vehicle Vehicle? @relation(fields: [vehicle_id], references: [id])
+  driver  Driver?  @relation(fields: [driver_id], references: [id])
+
+  @@index([vehicle_id])
+  @@index([driver_id])
+  @@index([status])
+  @@map("permits")
+}
+
+model MaintenanceRecord {
+  id             String    @id @default(uuid())
+  vehicle_id     String
+  type           String
+  scheduled_date DateTime
+  completed_date DateTime?
+  status         String
+  notes          String?
+
+  vehicle Vehicle @relation(fields: [vehicle_id], references: [id])
+
+  @@index([vehicle_id])
+  @@index([status])
+  @@map("maintenance_records")
+}
+
+model Movement {
+  id               String    @id @default(uuid())
+  type             String
+  item_category    String
+  reference_number String
+  entry_date       DateTime
+  exit_date        DateTime?
+  status           String
+  chassis_number   String?   @unique
+  bond_value_tzs   Decimal?  @db.Decimal(18, 2)
+  vehicle_description String?
+
+  extensions Extension[]
+  invoices   Invoice[]
+
+  @@index([status])
+  @@index([item_category])
+  @@map("movements")
+}
+
+model Extension {
+  id              String   @id @default(uuid())
+  movement_id     String
+  requested_date  DateTime
+  extended_until  DateTime
+  status          String
+
+  movement Movement @relation(fields: [movement_id], references: [id])
+
+  @@index([movement_id])
+  @@index([status])
+  @@map("extensions")
+}
+
+model Invoice {
+  id          String    @id @default(uuid())
+  movement_id String
+  amount      Decimal   @db.Decimal(14, 2)
+  issued_date DateTime
+  due_date    DateTime
+  paid_date   DateTime?
+  status      String
+
+  movement Movement @relation(fields: [movement_id], references: [id])
+
+  @@index([movement_id])
+  @@index([status])
+  @@map("invoices")
+}
+
+model Machine {
+  id                    String   @id @default(uuid())
+  name                  String
+  asset_tag             String   @unique
+  subsidiary_location   String
+  status                MachineStatus
+  last_status_change_at DateTime
+
+  @@index([status])
+  @@map("machines")
+}
