@@ -1,0 +1,15 @@
+.git
+.next
+dist
+node_modules
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.test
+data
+imports/*.csv
+imports/*.xlsx
+imports/*.xls
+*.log
+.DS_Store

@@ -21,8 +21,8 @@ services:
 
   api:
     build:
-      context: ../..
-      dockerfile: apps/ajs/Dockerfile
+      context: .
+      dockerfile: Dockerfile
       target: api
     restart: unless-stopped
     env_file: .env.production
@@ -45,8 +45,8 @@ services:
 
   frontend:
     build:
-      context: ../..
-      dockerfile: apps/ajs/Dockerfile
+      context: .
+      dockerfile: Dockerfile
       target: frontend
       args:
         NEXT_PUBLIC_AJS_API_URL: ${NEXT_PUBLIC_AJS_API_URL:-/api}

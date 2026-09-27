@@ -23,4 +23,4 @@ chmod 600 "$OUTPUT_FILE"
 echo "Backup created: $OUTPUT_FILE"
 
 # Nightly crontab example (02:00 UTC):
-# 0 2 * * * /opt/ajs/apps/ajs/scripts/backup.sh >> /var/log/ajs-backup.log 2>&1
+# 0 2 * * * /opt/ajs/scripts/backup.sh >> /var/log/ajs-backup.log 2>&1

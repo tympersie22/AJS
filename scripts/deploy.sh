@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AJS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$AJS_DIR/../.." && pwd)"
 ENV_FILE="${ENV_FILE:-$AJS_DIR/.env.production}"
 COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$AJS_DIR/docker-compose.prod.yml")
 
@@ -13,7 +12,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 echo "[1/6] Pulling the latest source"
-git -C "$REPO_ROOT" pull --ff-only
+git -C "$AJS_DIR" pull --ff-only
 
 echo "[2/6] Starting PostgreSQL and waiting for health"
 "${COMPOSE[@]}" up -d --wait postgres
